@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nyanites: DFIR Tools</title>
+<meta name="description" content="Free desktop tools for incident responders and threat hunters: Tidewatch, a Windows event log viewer for Mac, and Sediment, a $MFT, USN journal and Prefetch explorer.">
+<link rel="canonical" href="https://nyanites.github.io/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nyanites.github.io/">
+<meta property="og:title" content="Nyanites: DFIR Tools">
+<meta property="og:description" content="Tidewatch and Sediment: fast, local desktop tools for Windows forensics.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="icon" type="image/png" href="sediment/assets/favicon.png">
+<style>
+  :root {
+    --bg: #f7f8fb; --surface: #ffffff; --text: #141a28; --muted: #5b6478; --border: #e1e5ee;
+    --code-bg: #eef1f7; --shadow: 0 14px 40px rgba(20, 30, 60, 0.14);
+    --tide: #1f4fd1; --sed: #a8561a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d0f14; --surface: #161a22; --text: #e8ecf5; --muted: #9aa4b8; --border: #252c3a;
+      --code-bg: #1c2230; --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+      --tide: #5b8cff; --sed: #e89a55;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  code { font: 0.86em ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace; background: var(--code-bg); padding: 0.1em 0.4em; border-radius: 5px; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  header { padding: 84px 0 36px; }
+  h1 { font-size: clamp(34px, 5.5vw, 52px); letter-spacing: -0.03em; line-height: 1.1; margin: 0 0 12px; }
+  .lead { color: var(--muted); font-size: clamp(17px, 2.2vw, 20px); max-width: 680px; margin: 0; }
+  .tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; padding-bottom: 64px; }
+  .tool { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--c); border-radius: 16px; padding: 26px; box-shadow: var(--shadow); text-decoration: none; transition: transform .15s ease; }
+  .tool:hover { transform: translateY(-3px); }
+  .tool.tide { --c: var(--tide); }
+  .tool.sed { --c: var(--sed); }
+  .tool .head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+  .tool img { width: 56px; height: 56px; }
+  .tool h2 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+  .tool .kind { color: var(--c); font-weight: 600; font-size: 14px; }
+  .tool p { color: var(--muted); margin: 0 0 14px; }
+  .tool ul { margin: 0 0 18px; padding-left: 20px; color: var(--muted); font-size: 15px; }
+  .tool .plat { margin-top: auto; font-size: 14px; color: var(--muted); }
+  .tool .go { margin-top: 12px; font-weight: 600; color: var(--c); }
+  footer { border-top: 1px solid var(--border); padding: 30px 0 44px; color: var(--muted); font-size: 14px; }
+  footer a { color: var(--muted); }
+  @media (max-width: 560px) { .wrap { padding: 0 16px; } header { padding-top: 56px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Tools for reading what a Windows machine remembers.</h1>
+    <p class="lead">Fast, local desktop apps for incident responders and threat hunters. No uploads, no telemetry, source on GitHub, free for small teams.</p>
+  </div>
+</header>
+<main>
+  <div class="wrap tools">
+    <a class="tool tide" href="tidewatch/">
+      <div class="head">
+        <img src="tidewatch/assets/icon.png" width="56" height="56" alt="">
+        <div><h2>Tidewatch</h2><div class="kind">Windows event logs (.evtx)</div></div>
+      </div>
+      <p>Open, search and threat-hunt <code>.evtx</code> event logs natively on a Mac.</p>
+      <ul>
+        <li>Millions of events searched in milliseconds</li>
+        <li>Built-in detections mapped to MITRE ATT&amp;CK</li>
+        <li>Runs the Sigma rule library</li>
+      </ul>
+      <div class="plat">macOS 11+ · Apple Silicon &amp; Intel</div>
+      <div class="go">Visit Tidewatch →</div>
+    </a>
+    <a class="tool sed" href="sediment/">
+      <div class="head">
+        <img src="sediment/assets/icon.png" width="56" height="56" alt="">
+        <div><h2>Sediment</h2><div class="kind">$MFT · USN journal · Prefetch</div></div>
+      </div>
+      <p>Explore NTFS and execution artifacts, with the links between them.</p>
+      <ul>
+        <li>Folder tree, deleted entries and timestomping from the <code>$MFT</code></li>
+        <li>USN journal history for every file</li>
+        <li>Prefetch with known attacker tools flagged</li>
+      </ul>
+      <div class="plat">Windows · macOS · Linux</div>
+      <div class="go">Visit Sediment →</div>
+    </a>
+  </div>
+</main>
+<footer>
+  <div class="wrap">By <a href="https://github.com/Nyanites">Nyanites</a> · Not affiliated with Microsoft or Apple.</div>
+</footer>
+</body>
+</html>
