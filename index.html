@@ -10,9 +10,14 @@
 <meta property="og:url" content="https://nyanites.github.io/">
 <meta property="og:title" content="Cydra Suite: DFIR and Network Forensics Tools">
 <meta property="og:description" content="Tidewatch, Sediment and NetSift: fast, local desktop tools for event logs, disk artifacts and network traffic.">
+<meta property="og:image" content="https://nyanites.github.io/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<link rel="icon" type="image/png" href="sediment/assets/favicon.png">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <style>
   :root {
     --bg: #f7f8fb; --surface: #ffffff; --text: #141a28; --muted: #5b6478; --border: #e1e5ee;
@@ -40,6 +45,9 @@
   .tool.tide { --c: var(--tide); }
   .tool.sed { --c: var(--sed); }
   .tool.net { --c: var(--net); }
+  .brand { display: flex; align-items: center; gap: 13px; margin: 0 0 18px; }
+  .brand img { width: 46px; height: 46px; border-radius: 11px; display: block; box-shadow: var(--shadow); }
+  .brand .suite { margin: 0; }
   .suite { color: var(--tide); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 14px; margin: 0 0 14px; }
   .tool .head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
   .tool img { width: 56px; height: 56px; }
@@ -65,7 +73,7 @@
 <body>
 <header>
   <div class="wrap">
-    <p class="suite">Cydra Suite</p>
+    <div class="brand"><img src="assets/cydra-logo.png" width="46" height="46" alt="Cydra logo"><p class="suite">Cydra Suite</p></div>
     <h1>Tools for reading what machines remember, and what networks say.</h1>
     <p class="lead">Fast, local desktop apps for incident responders and threat hunters, by Cydraintel. No uploads, no telemetry, source on GitHub, free for small teams.</p>
   </div>
