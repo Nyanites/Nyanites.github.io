@@ -1,10 +1,17 @@
-# php2shell.rules — Suricata/Snort detections for CVE-2026-109618 / 109619
+# php2shell.rules — Suricata 7 detections for CVE-2026-109618 / 109619
 # -----------------------------------------------------------------------------
-# DEFENSIVE / HEURISTIC. These do not detect an exploit payload (the bug is a
-# memory-corruption race with no fixed byte-signature). They flag the *trigger
-# conditions and side effects* the advisory describes, so an analyst can spot
+# DEFENSIVE / HEURISTIC. These do not detect an exploit payload (both bugs are
+# memory-corruption with no fixed byte-signature). They flag the *trigger
+# conditions and side effects* the advisories describe, so an analyst can spot
 # grooming attempts and worker instability. Expect tuning — several will fire
 # on legitimate traffic until you set thresholds for your environment.
+#
+#   109619  GHSA-6wmf-4rv5-p3rp  RCE via stale global state
+#   109618  GHSA-w8hw-w9fx-j79w  RCE via OOM corruption
+#
+# Body-inspecting rules (1026001, 1026005-1026008) only see what libhtp keeps:
+# raise app-layer.protocols.http.libhtp.default-config.request-body-limit if
+# your uploads are larger than the default 100 KB.
 #
 # sid range 1026001+ (local-use range 1000000-1999999).
 # -----------------------------------------------------------------------------
@@ -20,19 +27,74 @@ alert http any any -> $HOME_NET any ( \
     threshold:type both, track by_src, count 30, seconds 10; \
     classtype:attempted-admin; sid:1026001; rev:2; )
 
-# --- 109618: memory_limit bailout trigger path --------------------------------
-# 109618 hangs on the memory_limit out-of-memory bailout. Remote attempts to
-# force OOM tend to show as abnormally large request bodies repeated quickly.
-# Matches a declared Content-Length >= 8,000,000 bytes. Tune the regex to just
-# above your app's legitimate max upload.
+# --- 109618: OOM during input processing --------------------------------------
+# 109618 is reached by making PHP run out of memory while it decodes the request.
+# The advisory's trigger is input that is small on the wire but expensive to
+# decode (rules 1026004-1026007). This rule is the crude form: large declared
+# bodies, repeated. Tune the regex to just above your app's legitimate max upload.
 alert http any any -> $HOME_NET any ( \
-    msg:"PHP2SHELL CVE-2026-109618 repeated oversized POST (possible memory_limit bailout abuse)"; \
+    msg:"PHP2SHELL CVE-2026-109618 repeated oversized POST (crude OOM attempt)"; \
     flow:to_server,established; http.method; content:"POST"; \
     http.content_len; pcre:"/^(?:[89][0-9]{6}|[0-9]{8,})$/"; \
     threshold:type both, track by_src, count 10, seconds 15; \
-    classtype:attempted-dos; sid:1026002; rev:2; )
+    classtype:attempted-dos; sid:1026002; rev:3; )
 
-# --- Side effect: worker crash / 500 storm ------------------------------------
+# Multipart with no declared Content-Length: passes PHP's up-front post_max_size
+# check and keeps supplying decoded data. Browsers do not send chunked forms.
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109618 chunked multipart POST (bypasses post_max_size pre-check)"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; nocase; startswith; \
+    http.header; content:"Transfer-Encoding|3a 20|chunked"; nocase; \
+    threshold:type limit, track by_src, count 1, seconds 60; \
+    classtype:attempted-admin; sid:1026004; rev:1; )
+
+# A multipart part with an abnormal number of headers. Legitimate parts carry
+# 1-3 (Content-Disposition, Content-Type); each costs far more memory in PHP
+# than on the wire. Fires on 50+ consecutive header lines.
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109618 multipart part header flood"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; nocase; \
+    http.request_body; content:"Content-Disposition"; nocase; \
+    pcre:"/(?:\r\n[A-Za-z0-9-]{1,64}:[^\r\n]{0,256}){50}/"; \
+    threshold:type limit, track by_src, count 1, seconds 60; \
+    classtype:attempted-admin; sid:1026005; rev:1; )
+
+# Empty file controls do not count toward max_file_uploads but still allocate
+# metadata arrays. Fires on 40+ empty file parts in one request. The gap bound
+# {1,160} keeps the match within Suricata's PCRE step limit; widen it and the
+# rule silently stops matching, so retest if you change it.
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109618 multipart empty file-control flood"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; nocase; \
+    http.request_body; content:"filename=|22 22|"; nocase; \
+    pcre:"/(?:filename=\x22\x22[\s\S]{1,160}){40}/i"; \
+    threshold:type limit, track by_src, count 1, seconds 60; \
+    classtype:attempted-admin; sid:1026006; rev:1; )
+
+# Deeply nested field names (a[b][c]...) multiply the arrays PHP builds. PHP's
+# default max_input_nesting_level is 64; real forms rarely exceed a handful.
+# Fires on 16+ levels. 1026007 covers multipart bodies (raw brackets), 1026008
+# urlencoded bodies (%5B...%5D).
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109618 deeply nested multipart field name (array amplification)"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.request_body; content:"name=|22|"; nocase; \
+    pcre:"/name=\x22[^\x22\r\n]{0,64}(?:\[[^\]\x22\r\n]{0,64}\]){16}/i"; \
+    threshold:type limit, track by_src, count 1, seconds 60; \
+    classtype:attempted-admin; sid:1026007; rev:1; )
+
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109618 deeply nested urlencoded field name (array amplification)"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.request_body; content:"%5B"; nocase; \
+    pcre:"/(?:%5B[^&=%]{0,64}%5D){16}/i"; \
+    threshold:type limit, track by_src, count 1, seconds 60; \
+    classtype:attempted-admin; sid:1026008; rev:1; )
+
+# --- Side effect: worker crash / 500 storm (both CVEs) ------------------------
 # A failing memory-corruption exploit is noisy: workers segfault and the server
 # returns 500s in bursts. Catch the server-side symptom regardless of vector.
 alert http $HOME_NET any -> any any ( \

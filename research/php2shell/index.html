@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CVE-2026-109619: Detecting the PHP Bug You Can't Code Around · Cydra Research</title>
-<meta name="description" content="An executive brief and an analyst deep-dive on CVE-2026-109619, the PHP engine use-after-free. Includes a fleet scanner, a host check, Suricata rules and SIEM queries, all tested in an isolated lab.">
+<title>CVE-2026-109618 &amp; 109619: Detecting the PHP Bugs You Can't Code Around · Cydra Research</title>
+<meta name="description" content="An executive brief and an analyst deep-dive on CVE-2026-109618 and 109619, two critical PHP engine RCEs that share one patch. Includes a fleet scanner, a host check, Suricata rules and SIEM queries, all tested in an isolated lab.">
 <link rel="canonical" href="https://nyanites.github.io/research/php2shell/">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://nyanites.github.io/research/php2shell/">
-<meta property="og:title" content="CVE-2026-109619: Detecting the PHP bug you can't code around">
-<meta property="og:description" content="Executive brief + analyst deep-dive. Free detection tooling: fleet scanner, host check, Suricata rules and SIEM queries, tested in an isolated lab.">
+<meta property="og:title" content="CVE-2026-109618 &amp; 109619: the PHP bugs you can't code around">
+<meta property="og:description" content="Two critical PHP engine RCEs, one patch. Executive brief + analyst deep-dive, with free detection tooling: fleet scanner, host check, Suricata rules and SIEM queries, tested in an isolated lab.">
 <meta property="og:image" content="https://nyanites.github.io/research/php2shell/img/og.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="720">
@@ -27,8 +27,8 @@
 <header class="post">
   <div class="wrap">
     <p class="eyebrow">Cydra Research · Vulnerability response</p>
-    <h1>CVE-2026-109619: the PHP bug you can't code your way out of</h1>
-    <p class="lead">A critical flaw in the PHP engine affects every website running on an unpatched server, however well the site itself is written. Here is what it means for the business, and the detection tooling we built and tested to find it and confirm the fix.</p>
+    <h1>CVE-2026-109618 &amp; 109619: the PHP bugs you can't code your way out of</h1>
+    <p class="lead">Two critical flaws in the PHP engine, fixed by the same update, affect every website running on an unpatched server, however well the site itself is written. Here is what they mean for the business, and the detection tooling we built and tested to find them and confirm the fix.</p>
     <p class="byline">Cydraintel · October 22, 2026 · 12 min read (or 3 if you only read the brief)</p>
 
     <div class="tracks">
@@ -41,7 +41,7 @@
       <a class="track tech" href="#technical">
         <div class="who">For analysts &amp; engineers</div>
         <h3>Technical deep-dive</h3>
-        <p>Root cause, affected versions, trigger paths, four detection layers with tested rules and queries, and remediation.</p>
+        <p>Both root causes, affected versions, trigger paths, four detection layers with tested rules and queries, and remediation.</p>
         <div class="go">Go to the deep-dive →</div>
       </a>
     </div>
@@ -54,14 +54,14 @@
     <p class="eyebrow">Part 1 · Executive brief</p>
     <div class="prose">
       <h2>The short version</h2>
-      <p>PHP runs a large share of the web: corporate sites, customer portals, WordPress and e-commerce stores. A newly disclosed flaw in the PHP <em>engine</em> can let an attacker <strong>run their own commands on a web server without logging in</strong>.</p>
+      <p>PHP runs a large share of the web: corporate sites, customer portals, WordPress and e-commerce stores. Two newly disclosed flaws in the PHP <em>engine</em> each let an attacker <strong>run their own commands on a web server without logging in</strong>. They were disclosed together, carry the same critical severity, and are closed by the same update.</p>
       <p>The unusual part is that this isn't a mistake in anyone's website code. It sits in the software underneath, so a site your developers wrote perfectly is still exposed if the server runs an old PHP version. <strong>Patching the engine is the fix.</strong> Rewriting the website isn't.</p>
     </div>
 
     <div class="stats">
-      <div class="stat"><b>9.2 / 10</b><span>Severity score (CVSS 4.0). Rated critical.</span></div>
+      <div class="stat"><b>2 CVEs</b><span>CVE-2026-109618 and 109619. Both critical, both closed by one update.</span></div>
+      <div class="stat"><b>9.2 / 10</b><span>Severity score (CVSS 4.0) for each. Rated critical.</span></div>
       <div class="stat"><b>No login</b><span>An attacker needs no account or credentials.</span></div>
-      <div class="stat"><b>All PHP apps</b><span>Every site on an unpatched server is affected, whatever its code quality.</span></div>
       <div class="stat"><b>Patch = fix</b><span>The only complete fix is updating PHP. Workarounds only reduce the risk.</span></div>
     </div>
 
@@ -79,7 +79,7 @@
       </div>
 
       <h2>What we did</h2>
-      <p>We built an isolated lab with two deliberately unpatched PHP servers and used it to develop and test the detection side of this vulnerability. We wrote no attack code. The lab answers two questions every security team gets asked: <em>are we exposed?</em> and <em>can we prove the fix worked?</em></p>
+      <p>We built an isolated lab with two deliberately unpatched PHP servers and used it to develop and test the detection side of these vulnerabilities. We wrote no attack code. The lab answers two questions every security team gets asked: <em>are we exposed?</em> and <em>can we prove the fix worked?</em></p>
     </div>
 
     <div class="compare">
@@ -110,12 +110,24 @@
   <div class="wrap">
     <p class="eyebrow">Part 2 · Technical deep-dive</p>
     <div class="prose">
-      <h2>Root cause: stale global state across requests</h2>
-      <p><strong>CVE-2026-109619</strong> (php-src advisory <a href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp">GHSA-6wmf-4rv5-p3rp</a>, CVSS 4.0 9.2, CWE-416) is a heap use-after-free in the interpreter.</p>
-      <p>Persistent SAPIs (mod_php, PHP-FPM) reuse worker processes across requests. Some engine-global state (error, session, object and extension bookkeeping) can still point into the <strong>previous request's heap</strong> after that request has ended and its memory has been released. If the stale state is touched before request initialisation resets it, the worker dereferences freed memory. That causes memory disclosure at best, and code execution as the web-server user at worst.</p>
-      <p>Because the bug is in the engine, <strong>application code is irrelevant to exposure</strong>. Exposure depends on the PHP build plus the reachable trigger features, which is why the lab has no "vulnerable app". It runs an unpatched engine with the trigger settings on.</p>
+      <h2>Two bugs, one patch</h2>
+      <p>The October 2026 PHP release fixes two separate, critical memory-corruption flaws in the interpreter. They were disclosed together, each scored CVSS 4.0 <strong>9.2</strong>, and both reach <strong>unauthenticated remote code execution as the web-worker account</strong>. The 109619 advisory says to follow 109618's remediation as well, and vice versa, because an attack on one tends to touch the other.</p>
+    </div>
+    <div class="tbl prose"><table>
+      <thead><tr><th>CVE</th><th>Advisory</th><th>Root cause</th></tr></thead>
+      <tbody>
+        <tr><td><code>CVE-2026-109619</code></td><td><a href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp">GHSA-6wmf-4rv5-p3rp</a><br>"RCE via stale global state"</td><td>Engine-global state left pointing into a <strong>finished request's freed heap</strong> (use-after-free, CWE-416).</td></tr>
+        <tr><td><code>CVE-2026-109618</code></td><td><a href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w">GHSA-w8hw-w9fx-j79w</a><br>"RCE via OOM corruption"</td><td>An out-of-memory abort (<code>longjmp()</code>) fires <strong>before request memory is initialised</strong>, leaving it invalid for shutdown to read (CWE-416/-824/-755).</td></tr>
+      </tbody>
+    </table></div>
+    <div class="prose">
+      <h3>109619: stale global state</h3>
+      <p>Persistent SAPIs (mod_php, PHP-FPM) reuse worker processes across requests. Some engine-global state (error, session, object and extension bookkeeping) can still point into the <strong>previous request's heap</strong> after that request has ended and its memory has been released. If the stale state is touched before request initialisation resets it, the worker dereferences freed memory. That causes memory disclosure at best, and code execution at worst.</p>
+      <h3>109618: OOM corruption</h3>
+      <p>PHP uses <code>longjmp()</code> to abandon a request when it runs out of memory. In some code paths request memory is reachable <em>before</em> its setup finishes; if an allocation fails there, the jump leaves that memory half-built, and request shutdown then reads or branches on it. The demonstrated trigger is forcing an out-of-memory condition during input processing. The full RCE was validated against Apache mod_php, which the advisory notes "unconditionally invokes the request shutdown procedure" even when startup failed; PHP-FPM, FrankenPHP and LSAPI are assessed as likely susceptible but were not demonstrated.</p>
+      <p>Because both bugs are in the engine, <strong>application code is irrelevant to exposure</strong>. Exposure depends on the PHP build plus the reachable trigger features, which is why the lab has no "vulnerable app". It runs an unpatched engine with the trigger settings on.</p>
 
-      <h3>Affected and fixed versions</h3>
+      <h3>Affected and fixed versions (both CVEs)</h3>
     </div>
     <div class="tbl prose"><table>
       <thead><tr><th>Branch</th><th>Fixed in</th><th>Status if older</th></tr></thead>
@@ -132,16 +144,21 @@
       <h3>Reachable trigger paths</h3>
     </div>
     <div class="tbl prose"><table>
-      <thead><tr><th>Path</th><th>Setting</th><th>Notes</th></tr></thead>
+      <thead><tr><th>CVE</th><th>Trigger path</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td>Session upload-progress</td><td><code>session.upload_progress.enabled</code></td><td><strong>On by default</strong>, so the widest exposure.</td></tr>
-        <tr><td>Fatal-error backtrace</td><td><code>fatal_error_backtraces=1</code></td><td>PHP 8.5 only. <strong>Code execution confirmed against mod_php.</strong></td></tr>
-        <tr><td>INI diagnostics before request init</td><td>n/a</td><td>Listed in the advisory, narrower in practice.</td></tr>
+        <tr><td>109619</td><td>Session upload-progress (<code>session.upload_progress.enabled</code>)</td><td><strong>On by default</strong>, so the widest exposure.</td></tr>
+        <tr><td>109619</td><td>Fatal-error backtrace (<code>fatal_error_backtraces=1</code>)</td><td>PHP 8.5 only. <strong>Code execution confirmed against mod_php.</strong></td></tr>
+        <tr><td>109619</td><td>INI diagnostics before request init</td><td>Listed in the advisory, narrower in practice.</td></tr>
+        <tr><td>109618</td><td>Multipart upload with no usable declared length</td><td>Passes the up-front <code>post_max_size</code> check, then keeps feeding decoded data.</td></tr>
+        <tr><td>109618</td><td>Input that is cheap on the wire, costly to decode</td><td>Many headers per part, empty file controls (don't count toward <code>max_file_uploads</code>), deeply nested field names.</td></tr>
       </tbody>
     </table></div>
 
     <div class="prose">
-      <p>A related issue, <strong>CVE-2026-109618</strong>, concerns the <code>memory_limit</code> out-of-memory bailout path. Its public detail is thinner, so we cover it here only as a detection pattern and don't characterise it further.</p>
+      <div class="callout warn">
+        <strong>The two bugs do not share a detection</strong>
+        <p>They share the <em>exposure</em> check (same fixed versions) and the <em>crash</em> signal (both are memory corruption). But their attack preconditions differ: 109619 is groomed by a burst of upload-progress fields, 109618 by malformed or amplifying input that forces an out-of-memory abort. Each needs its own network rule, below.</p>
+      </div>
 
       <h2>Detection in four layers</h2>
       <p>There's no fixed exploit byte signature for a memory-corruption race, so these detections focus on <strong>exposure</strong> (what can be hit), <strong>preconditions</strong> (what an attacker must do to set it up) and <strong>side effects</strong> (what a failing exploit leaves behind).</p>
@@ -149,8 +166,8 @@
 
     <div class="layers">
       <div class="layer"><div class="n">Layer 1 · Exposure</div><h4>Fleet scanner</h4><p>Remote PHP version fingerprint, checked against the fixed builds. Answers "where are we exposed?"</p></div>
-      <div class="layer"><div class="n">Layer 2 · Posture</div><h4>Host check</h4><p>Runs on the server itself. Reports version and trigger settings, and tells "mitigated" apart from "patched".</p></div>
-      <div class="layer"><div class="n">Layer 3 · Network</div><h4>Suricata rules</h4><p>Flag setup patterns: upload-progress bursts, repeated oversized POSTs and 500 storms.</p></div>
+      <div class="layer"><div class="n">Layer 2 · Posture</div><h4>Host check</h4><p>Runs on the server itself. Reports version and both CVEs' trigger settings, and tells "mitigated" apart from "patched".</p></div>
+      <div class="layer"><div class="n">Layer 3 · Network</div><h4>Suricata rules</h4><p>Flag setup patterns for both bugs: upload-progress bursts, OOM-inducing input and 500 storms.</p></div>
       <div class="layer"><div class="n">Layer 4 · Logs</div><h4>SIEM queries</h4><p>Worker segfaults, the highest-fidelity signal, correlated with the network patterns.</p></div>
     </div>
 
@@ -175,33 +192,40 @@ Summary: 0 affected/EOL, 0 errors, 2 patched.     # exit 0</code></pre>
       </div>
 
       <h3>Layer 2: Host posture check</h3>
-      <p><a href="files/check_mitigations.sh"><code>check_mitigations.sh</code></a> runs on the PHP host and reads the live version and INI settings from <code>php</code> itself.</p>
+      <p><a href="files/check_mitigations.sh"><code>check_mitigations.sh</code></a> runs on the PHP host and reads the live version and INI settings from <code>php</code> itself. It reports the 109619 toggles (<code>session.upload_progress.enabled</code>, <code>fatal_error_backtraces</code>) and the 109618 surface (<code>memory_limit</code>, <code>post_max_size</code>, and the input/nesting/upload caps), and warns against capping memory with <code>RLIMIT_AS</code>/<code>RLIMIT_DATA</code> — which itself triggers 109618.</p>
+      <p>The exit code tracks the patch status plus the 109619 toggles, which are clean on/off settings. 109618 has no single safe value, so its settings are advisory and don't change the code.</p>
     </div>
     <div class="tbl prose"><table>
       <thead><tr><th>Exit</th><th>Meaning</th></tr></thead>
       <tbody>
         <tr><td><code>0</code></td><td><span class="pill good">Patched</span></td></tr>
-        <tr><td><code>1</code></td><td><span class="pill bad">Affected</span>, with trigger paths still enabled. Prints the interim settings to change.</td></tr>
-        <tr><td><code>3</code></td><td><span class="pill warn">Affected but mitigated</span>. Trigger paths are off, but the host still needs upgrading.</td></tr>
+        <tr><td><code>1</code></td><td><span class="pill bad">Affected</span>, with 109619 trigger paths still enabled. Prints the interim settings to change.</td></tr>
+        <tr><td><code>3</code></td><td><span class="pill warn">Affected but mitigated</span>. 109619 paths are off, but the host still needs upgrading.</td></tr>
         <tr><td><code>2</code></td><td><code>php</code> not found in <code>PATH</code></td></tr>
       </tbody>
     </table></div>
 
     <div class="prose">
       <h3>Layer 3: Network rules (Suricata)</h3>
-      <p><a href="files/php2shell.rules"><code>php2shell.rules</code></a> holds three heuristic rules in the local SID range <code>1026001–1026003</code>. Treat them as tunable starting points, not turnkey IOCs. SID 1026003 in particular will fire on any noisy app until you baseline it.</p>
+      <p><a href="files/php2shell.rules"><code>php2shell.rules</code></a> holds eight heuristic rules in the local SID range <code>1026001–1026008</code>: one for 109619, five for 109618's input-amplification paths, a crude oversized-body rule, and a shared crash signal. Treat them as tunable starting points, not turnkey IOCs. SID 1026003 in particular will fire on any noisy app until you baseline it.</p>
     </div>
     <div class="tbl prose"><table>
-      <thead><tr><th>SID</th><th>Detects</th><th>Default threshold</th></tr></thead>
+      <thead><tr><th>SID</th><th>CVE</th><th>Detects</th><th>Default threshold</th></tr></thead>
       <tbody>
-        <tr><td><code>1026001</code></td><td>Burst of POSTs carrying <code>PHP_SESSION_UPLOAD_PROGRESS</code> (109619 grooming)</td><td>30 from one source in 10s</td></tr>
-        <tr><td><code>1026002</code></td><td>Repeated POSTs declaring <code>Content-Length</code> ≥ 8 MB (109618 OOM pattern)</td><td>10 from one source in 15s</td></tr>
-        <tr><td><code>1026003</code></td><td>HTTP 500 storm from a PHP host (crash side effect)</td><td>20 to one client in 10s</td></tr>
+        <tr><td><code>1026001</code></td><td>109619</td><td>Burst of POSTs carrying <code>PHP_SESSION_UPLOAD_PROGRESS</code> (grooming)</td><td>30 / src / 10s</td></tr>
+        <tr><td><code>1026002</code></td><td>109618</td><td>Repeated POSTs declaring <code>Content-Length</code> ≥ 8 MB (crude OOM)</td><td>10 / src / 15s</td></tr>
+        <tr><td><code>1026004</code></td><td>109618</td><td>Chunked <code>multipart/form-data</code> (slips past the <code>post_max_size</code> pre-check)</td><td>1 / src / 60s</td></tr>
+        <tr><td><code>1026005</code></td><td>109618</td><td>Multipart part with 50+ headers</td><td>1 / src / 60s</td></tr>
+        <tr><td><code>1026006</code></td><td>109618</td><td>40+ empty file controls in one request</td><td>1 / src / 60s</td></tr>
+        <tr><td><code>1026007</code></td><td>109618</td><td>16+ levels of nested field name, multipart body</td><td>1 / src / 60s</td></tr>
+        <tr><td><code>1026008</code></td><td>109618</td><td>16+ levels of nested field name, urlencoded body</td><td>1 / src / 60s</td></tr>
+        <tr><td><code>1026003</code></td><td>both</td><td>HTTP 500 storm from a PHP host (crash side effect)</td><td>20 / dst / 10s</td></tr>
       </tbody>
     </table></div>
     <div class="prose">
+      <p>The 109618 rules target the advisory's real trigger: input that is small on the wire but expensive for PHP to decode. An attack can stay well under any byte-size threshold, so a size rule alone (1026002) misses it; these catch the <em>shape</em> instead.</p>
       <details>
-        <summary>View the rules</summary>
+        <summary>View the 109619 and representative 109618 rules</summary>
 <pre><code>alert http any any -> $HOME_NET any ( \
     msg:"PHP2SHELL CVE-2026-109619 upload_progress field burst (possible UAF grooming)"; \
     flow:to_server,established; http.method; content:"POST"; \
@@ -209,20 +233,24 @@ Summary: 0 affected/EOL, 0 errors, 2 patched.     # exit 0</code></pre>
     threshold:type both, track by_src, count 30, seconds 10; \
     classtype:attempted-admin; sid:1026001; rev:2; )
 
+# 109618: multipart part carrying an abnormal number of headers
 alert http any any -> $HOME_NET any ( \
-    msg:"PHP2SHELL CVE-2026-109618 repeated oversized POST (possible memory_limit bailout abuse)"; \
+    msg:"PHP2SHELL CVE-2026-109618 multipart part header flood"; \
     flow:to_server,established; http.method; content:"POST"; \
-    http.content_len; pcre:"/^(?:[89][0-9]{6}|[0-9]{8,})$/"; \
-    threshold:type both, track by_src, count 10, seconds 15; \
-    classtype:attempted-dos; sid:1026002; rev:2; )
+    http.content_type; content:"multipart/form-data"; nocase; \
+    http.request_body; content:"Content-Disposition"; nocase; \
+    pcre:"/(?:\r\n[A-Za-z0-9-]{1,64}:[^\r\n]{0,256}){50}/"; \
+    threshold:type limit, track by_src, count 1, seconds 60; \
+    classtype:attempted-admin; sid:1026005; rev:1; )
 
+# Shared crash signal (both CVEs)
 alert http $HOME_NET any -> any any ( \
     msg:"PHP2SHELL possible exploitation side effect: HTTP 500 burst from PHP host"; \
     flow:to_client,established; http.stat_code; content:"500"; \
     threshold:type both, track by_dst, count 20, seconds 10; \
     classtype:web-application-attack; sid:1026003; rev:2; )</code></pre>
       </details>
-      <p class="muted">On an internet-facing sensor, scope the inbound rules to <code>$EXTERNAL_NET any -> $HOME_NET</code>.</p>
+      <p class="muted">The full eight-rule set is in <a href="files/php2shell.rules"><code>php2shell.rules</code></a>. On an internet-facing sensor, scope the inbound rules to <code>$EXTERNAL_NET any -> $HOME_NET</code>.</p>
 
       <h3>Layer 4: Log and SIEM detections</h3>
       <p>Network rules show <em>attempts</em>. Logs show <em>consequences</em>. A healthy PHP fleet almost never segfaults a worker, so a spike in segfaults is the strongest single indicator. Full query set: <a href="files/log_detections.md"><code>log_detections.md</code></a>.</p>
@@ -238,7 +266,7 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
 | where count > 3</code></pre>
       <div class="callout">
         <strong>The page-worthy alert is a correlation</strong>
-        <p>An <em>attempt</em> signal (upload-progress burst, OOM-fatal burst, or SID 1026001/1026002) plus a <em>crash</em> signal (worker segfault) <strong>from the same host within 5 minutes</strong>. That pairing is very unlikely to be benign.</p>
+        <p>An <em>attempt</em> signal (upload-progress burst, OOM-fatal burst, or any of SID 1026001–1026008) plus a <em>crash</em> signal (worker segfault) <strong>from the same host within 5 minutes</strong>. That pairing is very unlikely to be benign.</p>
       </div>
 
       <h2>How we validated it</h2>
@@ -247,10 +275,10 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
     <div class="tbl prose"><table>
       <thead><tr><th>Artifact</th><th>Test</th><th>Result</th></tr></thead>
       <tbody>
-        <tr><td>Suricata rules</td><td>Loaded with <code>suricata -T</code> on Suricata 7.0.11</td><td><span class="pill good">Pass</span> All 3 load cleanly</td></tr>
-        <tr><td>Suricata rules</td><td>Replayed a generated pcap containing 35 upload-progress POSTs, 12 POSTs of 9 MB, 25 HTTP 500s and a benign control request</td><td><span class="pill good">Pass</span> Each SID fires once. The control stays quiet.</td></tr>
+        <tr><td>Suricata rules</td><td>Loaded with <code>suricata -T</code> on Suricata 7.0.11</td><td><span class="pill good">Pass</span> All 8 load cleanly</td></tr>
+        <tr><td>Suricata rules</td><td>Replayed a generated pcap: upload-progress burst, 9 MB POSTs, chunked multipart, a 60-header part, 120 empty file controls, 20-level nested names (multipart and urlencoded), a 500 storm, plus two benign control posts</td><td><span class="pill good">Pass</span> All 8 SIDs fire once each. Both controls stay quiet.</td></tr>
         <tr><td><code>scan_fleet.py</code></td><td>Mock hosts covering affected, patched, EOL (8.1), hidden version and unreachable</td><td><span class="pill good">Pass</span> Correct verdict for each. Exit codes 1, 0 and 2 as documented.</td></tr>
-        <tr><td><code>check_mitigations.sh</code></td><td>Official <code>php:8.4.26</code>, <code>8.4.27</code> and <code>8.5.11</code> images, plus 8.5.11 with both trigger paths disabled</td><td><span class="pill good">Pass</span> Exit codes 1, 0, 1 and 3 as documented</td></tr>
+        <tr><td><code>check_mitigations.sh</code></td><td>Official <code>php:8.4.26</code>, <code>8.4.27</code> and <code>8.5.11</code> images, plus 8.5.11 with the 109619 paths disabled</td><td><span class="pill good">Pass</span> Reports both CVEs' settings. Exit codes 1, 0, 1 and 3 as documented</td></tr>
         <tr><td>Lab targets</td><td>Unpatched 8.4.26 and 8.5.11 upgraded to 8.4.27 and 8.5.12</td><td><span class="pill good">Pass</span> Verdict flips from AFFECTED to patched</td></tr>
       </tbody>
     </table></div>
@@ -265,9 +293,10 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
     <div class="prose">
       <h2>Remediation</h2>
       <ol class="asks">
-        <li><strong>Upgrade</strong> to 8.2.35, 8.3.36, 8.4.27 or 8.5.12 (or later). This is the only complete fix.</li>
-        <li><strong>If you can't patch yet</strong>, set <code>session.upload_progress.enabled=0</code>, and on 8.5 also set <code>fatal_error_backtraces=0</code>. Then <strong>restart every worker</strong>: the settings only apply to new workers. These steps reduce the exposure but don't remove it.</li>
-        <li><strong>Verify</strong>: <code>check_mitigations.sh</code> should exit <code>0</code> on each host, the fleet scan should exit <code>0</code>, and segfault counts should return to baseline.</li>
+        <li><strong>Upgrade</strong> to 8.2.35, 8.3.36, 8.4.27 or 8.5.12 (or later). This single update fixes both CVEs and is the only complete fix.</li>
+        <li><strong>If you can't patch yet (109619)</strong>, set <code>session.upload_progress.enabled=0</code>, and on 8.5 also set <code>fatal_error_backtraces=0</code>. Then <strong>restart every worker</strong>: the settings only apply to new workers.</li>
+        <li><strong>If you can't patch yet (109618)</strong>, the advisory's primary (still incomplete) config mitigation is <code>memory_limit=-1</code>; also keep <code>post_max_size</code> tight and cap <code>max_input_vars</code>, <code>max_input_nesting_level</code> and <code>max_file_uploads</code>. <strong>Do not</strong> cap process memory with <code>RLIMIT_AS</code>/<code>RLIMIT_DATA</code> — that makes allocations fail and triggers the very bug.</li>
+        <li><strong>Verify</strong>: <code>check_mitigations.sh</code> should exit <code>0</code> on each host, the fleet scan should exit <code>0</code>, and segfault counts should return to baseline. All interim steps reduce exposure but don't remove it.</li>
         <li><strong>Retire</strong> PHP ≤ 8.1. There is no full upstream fix for those branches.</li>
       </ol>
 
@@ -276,7 +305,8 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
         <li><strong>No exploit is published here, on purpose.</strong> The lab demonstrates exposure and patch verification, which is the deliverable defenders need.</li>
         <li>The network rules are <strong>heuristics</strong>. They catch setup patterns and side effects, not the corruption itself. Tune thresholds to your traffic.</li>
         <li>Version fingerprinting can't see hosts with <code>expose_php=Off</code>, and some vendors backport fixes without changing the version string. Confirm with the vendor's package changelog.</li>
-        <li>Version data comes from the php-src advisory. Check <a href="https://www.php.net/ChangeLog-8.php">php.net</a> for updates before acting on it.</li>
+        <li>The 109618 rules are tuned to Suricata 7's PCRE step limit; widening their repetition bounds can make them silently stop matching, so retest after any change (the rule file notes where).</li>
+        <li>Version and advisory data come from the two php-src advisories (<a href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp">109619</a>, <a href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w">109618</a>). Check <a href="https://www.php.net/ChangeLog-8.php">php.net</a> for updates before acting on it.</li>
       </ul>
 
       <h2>Downloads</h2>
@@ -286,7 +316,7 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
       <tbody>
         <tr><td><a href="files/scan_fleet.py">scan_fleet.py</a></td><td>Remote fleet exposure scanner (Python 3, standard library only)</td></tr>
         <tr><td><a href="files/check_mitigations.sh">check_mitigations.sh</a></td><td>On-host version and mitigation check (bash)</td></tr>
-        <tr><td><a href="files/php2shell.rules">php2shell.rules</a></td><td>Suricata 7 rules, SIDs 1026001–1026003</td></tr>
+        <tr><td><a href="files/php2shell.rules">php2shell.rules</a></td><td>Suricata 7 rules for both CVEs, SIDs 1026001–1026008</td></tr>
         <tr><td><a href="files/log_detections.md">log_detections.md</a></td><td>grep and SIEM queries plus the correlation rule</td></tr>
         <tr><td><a href="files/scan-before.csv">scan-before.csv</a> · <a href="files/scan-after.csv">scan-after.csv</a></td><td>Raw scanner evidence from the lab</td></tr>
       </tbody>

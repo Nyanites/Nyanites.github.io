@@ -42,8 +42,10 @@ If your app does not legitimately use upload-progress, **any** traffic carrying
 
 ## 3. Out-of-memory fatals (109618 trigger path)
 
-A burst of memory-exhaustion fatals can indicate attempts to drive the
-memory_limit bailout:
+109618 is reached by forcing an out-of-memory condition while PHP decodes the
+request (malformed/undeclared multipart length, header floods, empty file
+controls, deeply nested field names). A burst of memory-exhaustion fatals is
+the log-side symptom of that grooming:
 ```
 grep -E "Allowed memory size of [0-9]+ bytes exhausted" /var/log/php_errors.log \
   | awk '{print $1, $2}' | uniq -c | sort -rn
@@ -52,6 +54,10 @@ grep -E "Allowed memory size of [0-9]+ bytes exhausted" /var/log/php_errors.log 
 index=web "Allowed memory size of" "bytes exhausted"
 | timechart span=1m count | where count > 10
 ```
+Pair this with the network rules for the same source (SIDs 1026002,
+1026004-1026008) to separate an attack from an app that is merely busy. Note
+that `memory_limit=-1` (an advisory mitigation) suppresses these fatals, so on
+mitigated hosts lean on the segfault signal in section 1 instead.
 
 ## 4. Fatal-error backtrace storm (PHP 8.5 path)
 
