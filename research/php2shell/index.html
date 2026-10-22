@@ -353,10 +353,10 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
       <thead><tr><th>Artifact</th><th>Test</th><th>Result</th></tr></thead>
       <tbody>
         <tr><td>Suricata rules</td><td>Loaded with <code>suricata -T</code> on Suricata 7.0.11</td><td><span class="pill good">Pass</span> All 8 load cleanly</td></tr>
-        <tr><td>Suricata rules</td><td>Replayed a generated pcap: upload-progress burst, 9 MB POSTs, chunked multipart, a 60-header part, 120 empty file controls, 20-level nested names (multipart and urlencoded), a 500 storm, plus two benign control posts</td><td><span class="pill good">Pass</span> All 8 SIDs fire once each. Both controls stay quiet.</td></tr>
-        <tr><td><code>scan_fleet.py</code></td><td>Mock hosts covering affected, patched, EOL (8.1), hidden version and unreachable</td><td><span class="pill good">Pass</span> Correct verdict for each. Exit codes 1, 0 and 2 as documented.</td></tr>
-        <tr><td><code>check_mitigations.sh</code></td><td>Official <code>php:8.4.26</code>, <code>8.4.27</code> and <code>8.5.11</code> images, plus 8.5.11 with the 109619 paths disabled</td><td><span class="pill good">Pass</span> Reports both CVEs' settings. Exit codes 1, 0, 1 and 3 as documented</td></tr>
-        <tr><td>Lab targets</td><td>Unpatched 8.4.26 and 8.5.11 upgraded to 8.4.27 and 8.5.12</td><td><span class="pill good">Pass</span> Verdict flips from AFFECTED to patched</td></tr>
+        <tr><td>Suricata rules</td><td>Replayed against <strong>real captured mod_php traffic</strong> (Apache 8.4.26 on the live lab): upload-progress burst, 9 MB POSTs, chunked multipart, a 60-header part, 120 empty file controls, 20-level nested names (multipart and urlencoded), genuine HTTP 500s, plus two benign control posts. Capture verified at 0 dropped packets.</td><td><span class="pill good">Pass</span> All 8 SIDs fire once each. Both controls stay quiet.</td></tr>
+        <tr><td><code>scan_fleet.py</code></td><td>Run against the <strong>live mod_php lab</strong> (real <code>X-Powered-By</code>): unpatched 8.4.26 / 8.5.11, then patched 8.4.27 / 8.5.12. Mock hosts additionally cover EOL (8.1), hidden version and unreachable.</td><td><span class="pill good">Pass</span> AFFECTED → exit 1, PATCHED → exit 0. Edge cases as documented.</td></tr>
+        <tr><td><code>check_mitigations.sh</code></td><td>Run <strong>inside the live containers</strong> (8.5.11 and patched 8.4.27) plus official images for the remaining exit paths</td><td><span class="pill good">Pass</span> Reports both CVEs' settings. Exit codes 1, 0, 1 and 3 as documented</td></tr>
+        <tr><td>Lab targets</td><td>Real unpatched 8.4.26 and 8.5.11 (mod_php) upgraded to 8.4.27 and 8.5.12</td><td><span class="pill good">Pass</span> Exposure page and scanner both flip from AFFECTED to patched</td></tr>
       </tbody>
     </table></div>
 
