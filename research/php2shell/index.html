@@ -24,6 +24,52 @@
 
 <div class="wrap"><nav class="top"><a href="../../">Cydra Suite</a> &nbsp;/&nbsp; <a href="../">Research</a></nav></div>
 
+<div class="hero" aria-hidden="true">
+  <svg viewBox="0 0 1440 360" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="cells" width="74" height="360" patternUnits="userSpaceOnUse">
+        <rect x="8" y="165" width="58" height="54" rx="9" class="cell"/>
+      </pattern>
+      <radialGradient id="rglow" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="var(--res)" stop-opacity=".20"/>
+        <stop offset="1" stop-color="var(--res)" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="tglow" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="var(--teal)" stop-opacity=".18"/>
+        <stop offset="1" stop-color="var(--teal)" stop-opacity="0"/>
+      </radialGradient>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <!-- soft glows behind the two focal points -->
+    <ellipse cx="732" cy="196" rx="190" ry="120" fill="url(#rglow)"/>
+    <ellipse cx="300" cy="196" rx="170" ry="110" fill="url(#tglow)"/>
+
+    <!-- the heap: a row of reused memory cells -->
+    <rect x="-40" y="0" width="1520" height="360" fill="url(#cells)"/>
+
+    <!-- two cells still referenced after being freed -->
+    <rect x="674" y="165" width="58" height="54" rx="9" class="free"/>
+    <rect x="748" y="165" width="58" height="54" rx="9" class="free"/>
+
+    <!-- stale pointer from global state into the freed block -->
+    <text x="576" y="120" text-anchor="end" class="lbl red">STALE GLOBAL STATE</text>
+    <circle cx="590" cy="116" r="6" class="head"/>
+    <path d="M590,116 C636,138 652,150 694,161" class="ptr"/>
+    <path d="M694,161 l-13,-5 l6,12 z" class="head"/>
+    <text x="761" y="250" text-anchor="middle" class="lbl">REQUEST N&#8722;1 &#183; FREED</text>
+
+    <!-- detection sweep across the heap -->
+    <line x1="-40" y1="196" x2="1480" y2="196" class="scan" filter="url(#glow)"/>
+    <circle cx="300" cy="196" r="11" class="ring"/>
+    <circle cx="300" cy="196" r="5" class="pulse" filter="url(#glow)"/>
+    <text x="300" y="176" class="lbl tl">DETECTION SWEEP</text>
+  </svg>
+</div>
+
 <header class="post">
   <div class="wrap">
     <p class="eyebrow">Cydra Research · Vulnerability response</p>
