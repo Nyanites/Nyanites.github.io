@@ -60,7 +60,7 @@
 
     <div class="stats">
       <div class="stat"><b>2 CVEs</b><span>CVE-2026-109618 and 109619. Both critical, both closed by one update.</span></div>
-      <div class="stat"><b>9.2 / 10</b><span>Severity score (CVSS 4.0) for each. Rated critical.</span></div>
+      <div class="stat"><b>9.8 / 10</b><span>NVD severity (CVSS 3.1) for each; PHP scores them 9.2 on CVSS 4.0. Both critical.</span></div>
       <div class="stat"><b>No login</b><span>An attacker needs no account or credentials.</span></div>
       <div class="stat"><b>Patch = fix</b><span>The only complete fix is updating PHP. Workarounds only reduce the risk.</span></div>
     </div>
@@ -97,7 +97,7 @@
         <tr>
           <td>Impact if exploited</td>
           <td><span class="pill bad">Critical</span></td>
-          <td>Unauthenticated remote code execution as the web-server account; even failed attempts can leak memory. Engine-level, so every PHP site on the host is in scope. CVSS 4.0 <strong>9.2</strong>.</td>
+          <td>Unauthenticated remote code execution as the web-server account; even failed attempts can leak memory. Engine-level, so every PHP site on the host is in scope. NVD <strong>9.8</strong> (CVSS 3.1) / PHP <strong>9.2</strong> (CVSS 4.0).</td>
         </tr>
       </tbody>
     </table></div>
@@ -141,7 +141,7 @@
     <p class="eyebrow">Part 2 · Technical deep-dive</p>
     <div class="prose">
       <h2>Two bugs, one patch</h2>
-      <p>The <strong>22 October 2026</strong> PHP release (8.2.35 / 8.3.36 / 8.4.27 / 8.5.12) fixes two separate, critical memory-corruption flaws in the interpreter. They were disclosed together, each scored CVSS 4.0 <strong>9.2</strong> by PHP's CNA, and both reach <strong>unauthenticated remote code execution as the web-worker account</strong>. The 109619 advisory says to follow 109618's remediation as well, and vice versa, because an attack on one tends to touch the other.</p>
+      <p>The <strong>22 October 2026</strong> PHP release (8.2.35 / 8.3.36 / 8.4.27 / 8.5.12) fixes two separate, critical memory-corruption flaws in the interpreter. Both reach <strong>unauthenticated remote code execution as the web-worker account</strong>. NVD scores each <strong>9.8</strong> (CVSS 3.1); PHP's own CNA scores them <strong>9.2</strong> (CVSS 4.0). The two systems disagree on one axis worth noting — NVD rates attack complexity <em>Low</em>, PHP rates it <em>High</em> — which matches the picture below: network-reachable and unauthenticated, but not yet push-button reliable. The 109619 advisory says to follow 109618's remediation as well, and vice versa, because an attack on one tends to touch the other.</p>
       <p>The official <a href="https://www.php.net/ChangeLog-8.php">php.net changelog</a> confirms the shared fix: each release carries one Core entry, <em>"Fixed GHSA-w8hw-w9fx-j79w, GHSA-6wmf-4rv5-p3rp (Avoid state corruption via bailout)."</em> The changelog cites the advisory IDs rather than the CVE numbers; the CVE IDs and scores below come from the advisories themselves.</p>
     </div>
     <div class="tbl prose"><table>
@@ -318,7 +318,7 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
       <video controls muted playsinline preload="none" poster="img/poster.png" width="1280" height="720">
         <source src="img/php2shell-detection.mp4" type="video/mp4">
       </video>
-      <figcaption>22-second walkthrough: an exposed target, the signals to watch, the fix, and the clean re-scan.</figcaption>
+      <figcaption>Walkthrough: the lab scanned as exposed, the eight Suricata rules firing on replayed lab traffic (127.0.0.1), the on-host posture check, the fix, and the clean re-scan. Every panel is real output from the localhost lab.</figcaption>
     </figure>
 
     <div class="prose">
@@ -338,6 +338,7 @@ index=web ("exit signal Segmentation fault" OR "exited on signal 11")
         <li>Version fingerprinting can't see hosts with <code>expose_php=Off</code>, and some vendors backport fixes without changing the version string. Confirm with the vendor's package changelog.</li>
         <li>The 109618 rules are tuned to Suricata 7's PCRE step limit; widening their repetition bounds can make them silently stop matching, so retest after any change (the rule file notes where).</li>
         <li>Version and advisory data come from the two php-src advisories (<a href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp">109619</a>, <a href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w">109618</a>) and were cross-checked against the <a href="https://www.php.net/ChangeLog-8.php">php.net changelog</a> (22 Oct 2026 releases). Re-check php.net for any later point releases before acting on it.</li>
+        <li>CVSS scores are as published: NVD's CVSS 3.1 9.8 is the primary score (<a href="https://nvd.nist.gov/vuln/detail/CVE-2026-109618">109618</a>, <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-109619">109619</a>); PHP's CVSS 4.0 9.2 is the secondary score from its advisories.</li>
       </ul>
 
       <h2>Downloads</h2>
