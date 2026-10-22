@@ -78,6 +78,36 @@
         <p>The attack is technically difficult to pull off reliably, and attempts are <em>noisy</em>: they crash things in recognisable ways. That gives defenders a window and a clear signal to watch for, which is what the tooling below is for.</p>
       </div>
 
+      <h2>Risk assessment</h2>
+      <p class="muted">Snapshot as of 22 October 2026, from public reporting cited below. Exploitation reporting is moving fast — re-check before relying on it.</p>
+    </div>
+    <div class="tbl prose"><table>
+      <thead><tr><th>Dimension</th><th>Rating</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Likelihood of attempts</td>
+          <td><span class="pill bad">High</span></td>
+          <td>CVE details leaked 20 Oct, a day before the patch. Amazon Threat Intelligence logged a probe against its honeypots on <strong>17 Oct — before disclosure</strong> — and more on 21 Oct it attributes to multiple actors; watchTowr and Cloudflare also report early attempts.</td>
+        </tr>
+        <tr>
+          <td>Exploit maturity</td>
+          <td><span class="pill warn">Emerging</span></td>
+          <td>A proof-of-concept is circulating, and Datadog says it reproduced the bug. But the PHP Foundation said no <em>functional</em> public exploit existed at disclosure, full RCE is demonstrated only against Apache <code>mod_php</code> (not PHP-FPM), and reliability depends on the server's memory layout (CVSS complexity: High).</td>
+        </tr>
+        <tr>
+          <td>Impact if exploited</td>
+          <td><span class="pill bad">Critical</span></td>
+          <td>Unauthenticated remote code execution as the web-server account; even failed attempts can leak memory. Engine-level, so every PHP site on the host is in scope. CVSS 4.0 <strong>9.2</strong>.</td>
+        </tr>
+      </tbody>
+    </table></div>
+    <div class="prose">
+      <div class="callout warn">
+        <strong>What's still uncertain</strong>
+        <p>Amazon says it is not clear the 21 Oct attempts would have succeeded against live systems, and neither CVE is in CISA's Known Exploited Vulnerabilities catalogue yet. Treat exploitation as <strong>likely and imminent</strong> rather than confirmed at scale — and patch on that basis. Sources: <a href="https://www.tenable.com/blog/php2shell-cve-2026-109618-cve-2026-109619-frequently-asked-questions-about-critical-php-remote">Tenable</a>, <a href="https://watchtowr.com/intelligence/php-remote-code-execution-php2shell/">watchTowr</a>, <a href="https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/">Datadog</a>.</p>
+      </div>
+      <p><strong>Bottom line.</strong> Critical impact, network-reachable, no login required, a public PoC, and probing within days of disclosure — against an exploit that is not yet push-button reliable. That is precisely the window to patch in: the stakes are high, attackers are warming up, and the lead time before reliable mass exploitation is short.</p>
+
       <h2>What we did</h2>
       <p>We built an isolated lab with two deliberately unpatched PHP servers and used it to develop and test the detection side of these vulnerabilities. We wrote no attack code. The lab answers two questions every security team gets asked: <em>are we exposed?</em> and <em>can we prove the fix worked?</em></p>
     </div>
