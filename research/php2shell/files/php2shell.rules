@@ -1,0 +1,47 @@
+# php2shell.rules — Suricata/Snort detections for CVE-2026-109618 / 109619
+# -----------------------------------------------------------------------------
+# DEFENSIVE / HEURISTIC. These do not detect an exploit payload (the bug is a
+# memory-corruption race with no fixed byte-signature). They flag the *trigger
+# conditions and side effects* the advisory describes, so an analyst can spot
+# grooming attempts and worker instability. Expect tuning — several will fire
+# on legitimate traffic until you set thresholds for your environment.
+#
+# sid range 1026001+ (local-use range 1000000-1999999).
+# -----------------------------------------------------------------------------
+
+# --- 109619: session upload-progress trigger path -----------------------------
+# The advisory names session.upload_progress as a reachable path to the stale-
+# state use-after-free. Grooming it means driving MANY multipart POSTs carrying
+# the PHP_SESSION_UPLOAD_PROGRESS field. One request is normal; a burst is not.
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109619 upload_progress field burst (possible UAF grooming)"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.request_body; content:"PHP_SESSION_UPLOAD_PROGRESS"; nocase; \
+    threshold:type both, track by_src, count 30, seconds 10; \
+    classtype:attempted-admin; sid:1026001; rev:2; )
+
+# --- 109618: memory_limit bailout trigger path --------------------------------
+# 109618 hangs on the memory_limit out-of-memory bailout. Remote attempts to
+# force OOM tend to show as abnormally large request bodies repeated quickly.
+# Matches a declared Content-Length >= 8,000,000 bytes. Tune the regex to just
+# above your app's legitimate max upload.
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109618 repeated oversized POST (possible memory_limit bailout abuse)"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.content_len; pcre:"/^(?:[89][0-9]{6}|[0-9]{8,})$/"; \
+    threshold:type both, track by_src, count 10, seconds 15; \
+    classtype:attempted-dos; sid:1026002; rev:2; )
+
+# --- Side effect: worker crash / 500 storm ------------------------------------
+# A failing memory-corruption exploit is noisy: workers segfault and the server
+# returns 500s in bursts. Catch the server-side symptom regardless of vector.
+alert http $HOME_NET any -> any any ( \
+    msg:"PHP2SHELL possible exploitation side effect: HTTP 500 burst from PHP host"; \
+    flow:to_client,established; http.stat_code; content:"500"; \
+    threshold:type both, track by_dst, count 20, seconds 10; \
+    classtype:web-application-attack; sid:1026003; rev:2; )
+
+# -----------------------------------------------------------------------------
+# NOTE on $EXTERNAL_NET: for an internet-facing sensor, replace "any any ->
+# $HOME_NET" with "$EXTERNAL_NET any -> $HOME_NET" to scope to inbound traffic.
+# -----------------------------------------------------------------------------

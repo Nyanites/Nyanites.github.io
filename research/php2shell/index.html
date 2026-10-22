@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CVE-2026-109619: Detecting the PHP Bug You Can't Code Around · Cydra Research</title>
+<meta name="description" content="An executive brief and an analyst deep-dive on CVE-2026-109619, the PHP engine use-after-free. Includes a fleet scanner, a host check, Suricata rules and SIEM queries, all tested in an isolated lab.">
+<link rel="canonical" href="https://nyanites.github.io/research/php2shell/">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://nyanites.github.io/research/php2shell/">
+<meta property="og:title" content="CVE-2026-109619: Detecting the PHP bug you can't code around">
+<meta property="og:description" content="Executive brief + analyst deep-dive. Free detection tooling: fleet scanner, host check, Suricata rules and SIEM queries, tested in an isolated lab.">
+<meta property="og:image" content="https://nyanites.github.io/research/php2shell/img/og.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="article:published_time" content="2026-10-22">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="icon" type="image/png" href="../../sediment/assets/favicon.png">
+<link rel="stylesheet" href="../research.css">
+</head>
+<body>
+
+<div class="wrap"><nav class="top"><a href="../../">Cydra Suite</a> &nbsp;/&nbsp; <a href="../">Research</a></nav></div>
+
+<header class="post">
+  <div class="wrap">
+    <p class="eyebrow">Cydra Research · Vulnerability response</p>
+    <h1>CVE-2026-109619: the PHP bug you can't code your way out of</h1>
+    <p class="lead">A critical flaw in the PHP engine affects every website running on an unpatched server, however well the site itself is written. Here is what it means for the business, and the detection tooling we built and tested to find it and confirm the fix.</p>
+    <p class="byline">Cydraintel · October 22, 2026 · 12 min read (or 3 if you only read the brief)</p>
+
+    <div class="tracks">
+      <a class="track exec" href="#brief">
+        <div class="who">For leadership</div>
+        <h3>Executive brief</h3>
+        <p>The risk in plain language, how exposed a typical estate is, and three decisions to make this week.</p>
+        <div class="go">Read the brief →</div>
+      </a>
+      <a class="track tech" href="#technical">
+        <div class="who">For analysts &amp; engineers</div>
+        <h3>Technical deep-dive</h3>
+        <p>Root cause, affected versions, trigger paths, four detection layers with tested rules and queries, and remediation.</p>
+        <div class="go">Go to the deep-dive →</div>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- ============================ EXECUTIVE BRIEF ============================ -->
+<section class="part exec" id="brief">
+  <div class="wrap">
+    <p class="eyebrow">Part 1 · Executive brief</p>
+    <div class="prose">
+      <h2>The short version</h2>
+      <p>PHP runs a large share of the web: corporate sites, customer portals, WordPress and e-commerce stores. A newly disclosed flaw in the PHP <em>engine</em> can let an attacker <strong>run their own commands on a web server without logging in</strong>.</p>
+      <p>The unusual part is that this isn't a mistake in anyone's website code. It sits in the software underneath, so a site your developers wrote perfectly is still exposed if the server runs an old PHP version. <strong>Patching the engine is the fix.</strong> Rewriting the website isn't.</p>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>9.2 / 10</b><span>Severity score (CVSS 4.0). Rated critical.</span></div>
+      <div class="stat"><b>No login</b><span>An attacker needs no account or credentials.</span></div>
+      <div class="stat"><b>All PHP apps</b><span>Every site on an unpatched server is affected, whatever its code quality.</span></div>
+      <div class="stat"><b>Patch = fix</b><span>The only complete fix is updating PHP. Workarounds only reduce the risk.</span></div>
+    </div>
+
+    <div class="prose">
+      <h2>What it means for the business</h2>
+      <ul class="clean">
+        <li><strong>Data exposure.</strong> Even a failed attack can leak scraps of other visitors' data from server memory. A successful one hands over the server.</li>
+        <li><strong>Downtime.</strong> Attack attempts tend to crash web workers, so customers may see errors and slow pages before anyone sees a breach.</li>
+        <li><strong>Hidden inventory.</strong> PHP often runs on forgotten marketing sites, vendor-hosted portals and old internal tools. Those systems are the hardest to patch and the easiest to miss.</li>
+      </ul>
+
+      <div class="callout res">
+        <strong>The good news</strong>
+        <p>The attack is technically difficult to pull off reliably, and attempts are <em>noisy</em>: they crash things in recognisable ways. That gives defenders a window and a clear signal to watch for, which is what the tooling below is for.</p>
+      </div>
+
+      <h2>What we did</h2>
+      <p>We built an isolated lab with two deliberately unpatched PHP servers and used it to develop and test the detection side of this vulnerability. We wrote no attack code. The lab answers two questions every security team gets asked: <em>are we exposed?</em> and <em>can we prove the fix worked?</em></p>
+    </div>
+
+    <div class="compare">
+      <figure>
+        <img src="img/02-target-85-AFFECTED.png" width="1400" height="802" alt="Lab exposure page for PHP 8.5.11 showing the verdict AFFECTED (unpatched) with both trigger settings On." loading="lazy">
+        <figcaption><span class="pill bad">Before</span> PHP 8.5.11: flagged <strong>affected</strong>.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/04-target-85-PATCHED.png" width="1400" height="802" alt="The same exposure page after upgrading to PHP 8.5.12, showing the verdict patched / not affected." loading="lazy">
+        <figcaption><span class="pill good">After</span> PHP 8.5.12: same check, now <strong>patched</strong>.</figcaption>
+      </figure>
+    </div>
+
+    <div class="prose">
+      <h2>Three decisions for this week</h2>
+      <ol class="asks">
+        <li><strong>Authorise an emergency PHP patch window</strong> for internet-facing systems first, then internal ones. This is the only real fix.</li>
+        <li><strong>Ask for a complete PHP inventory</strong>, including third-party and vendor-hosted sites. The fleet scanner below produces this list in minutes.</li>
+        <li><strong>Turn on crash alerting</strong> for web servers until patching is done. Repeated PHP crashes are the clearest early warning of an attack.</li>
+      </ol>
+      <p class="muted">The rest of this page is written for the team that will carry those out.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================== TECHNICAL DEEP-DIVE ========================== -->
+<section class="part tech" id="technical">
+  <div class="wrap">
+    <p class="eyebrow">Part 2 · Technical deep-dive</p>
+    <div class="prose">
+      <h2>Root cause: stale global state across requests</h2>
+      <p><strong>CVE-2026-109619</strong> (php-src advisory <a href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp">GHSA-6wmf-4rv5-p3rp</a>, CVSS 4.0 9.2, CWE-416) is a heap use-after-free in the interpreter.</p>
+      <p>Persistent SAPIs (mod_php, PHP-FPM) reuse worker processes across requests. Some engine-global state (error, session, object and extension bookkeeping) can still point into the <strong>previous request's heap</strong> after that request has ended and its memory has been released. If the stale state is touched before request initialisation resets it, the worker dereferences freed memory. That causes memory disclosure at best, and code execution as the web-server user at worst.</p>
+      <p>Because the bug is in the engine, <strong>application code is irrelevant to exposure</strong>. Exposure depends on the PHP build plus the reachable trigger features, which is why the lab has no "vulnerable app". It runs an unpatched engine with the trigger settings on.</p>
+
+      <h3>Affected and fixed versions</h3>
+    </div>
+    <div class="tbl prose"><table>
+      <thead><tr><th>Branch</th><th>Fixed in</th><th>Status if older</th></tr></thead>
+      <tbody>
+        <tr><td>8.2.x</td><td><code>8.2.35</code></td><td><span class="pill bad">Affected</span></td></tr>
+        <tr><td>8.3.x</td><td><code>8.3.36</code></td><td><span class="pill bad">Affected</span></td></tr>
+        <tr><td>8.4.x</td><td><code>8.4.27</code></td><td><span class="pill bad">Affected</span></td></tr>
+        <tr><td>8.5.x</td><td><code>8.5.12</code></td><td><span class="pill bad">Affected</span></td></tr>
+        <tr><td>≤ 8.1, 7.x, 5.x</td><td>No full upstream fix</td><td><span class="pill warn">Treat as exposed</span></td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="prose">
+      <h3>Reachable trigger paths</h3>
+    </div>
+    <div class="tbl prose"><table>
+      <thead><tr><th>Path</th><th>Setting</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Session upload-progress</td><td><code>session.upload_progress.enabled</code></td><td><strong>On by default</strong>, so the widest exposure.</td></tr>
+        <tr><td>Fatal-error backtrace</td><td><code>fatal_error_backtraces=1</code></td><td>PHP 8.5 only. <strong>Code execution confirmed against mod_php.</strong></td></tr>
+        <tr><td>INI diagnostics before request init</td><td>n/a</td><td>Listed in the advisory, narrower in practice.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="prose">
+      <p>A related issue, <strong>CVE-2026-109618</strong>, concerns the <code>memory_limit</code> out-of-memory bailout path. Its public detail is thinner, so we cover it here only as a detection pattern and don't characterise it further.</p>
+
+      <h2>Detection in four layers</h2>
+      <p>There's no fixed exploit byte signature for a memory-corruption race, so these detections focus on <strong>exposure</strong> (what can be hit), <strong>preconditions</strong> (what an attacker must do to set it up) and <strong>side effects</strong> (what a failing exploit leaves behind).</p>
+    </div>
+
+    <div class="layers">
+      <div class="layer"><div class="n">Layer 1 · Exposure</div><h4>Fleet scanner</h4><p>Remote PHP version fingerprint, checked against the fixed builds. Answers "where are we exposed?"</p></div>
+      <div class="layer"><div class="n">Layer 2 · Posture</div><h4>Host check</h4><p>Runs on the server itself. Reports version and trigger settings, and tells "mitigated" apart from "patched".</p></div>
+      <div class="layer"><div class="n">Layer 3 · Network</div><h4>Suricata rules</h4><p>Flag setup patterns: upload-progress bursts, repeated oversized POSTs and 500 storms.</p></div>
+      <div class="layer"><div class="n">Layer 4 · Logs</div><h4>SIEM queries</h4><p>Worker segfaults, the highest-fidelity signal, correlated with the network patterns.</p></div>
+    </div>
+
+    <div class="prose">
+      <h3>Layer 1: Fleet exposure scanner</h3>
+      <p><a href="files/scan_fleet.py"><code>scan_fleet.py</code></a> is a Python 3 script with only standard-library dependencies. It reads the PHP version from <code>X-Powered-By</code>, falls back to <code>Server</code> and then the HTML body, and classifies each host as <code>AFFECTED</code>, <code>EOL</code>, <code>PATCHED</code> or <code>UNKNOWN</code>. Exit codes are designed for CI or a scheduled job.</p>
+<pre><code>$ python3 scan_fleet.py -f hosts.txt --csv before.csv
+TARGET                  PHP       VERDICT
+----------------------------------------------
+http://127.0.0.1:8080   8.4.26    ❌ AFFECTED  (fixed in 8.4.27)
+http://127.0.0.1:8085   8.5.11    ❌ AFFECTED  (fixed in 8.5.12)
+
+Summary: 2 affected/EOL, 0 errors, 0 patched.     # exit 1
+
+# ...after upgrading both containers...
+http://127.0.0.1:8080   8.4.27    ✅ PATCHED  (fixed in 8.4.27)
+http://127.0.0.1:8085   8.5.12    ✅ PATCHED  (fixed in 8.5.12)
+Summary: 0 affected/EOL, 0 errors, 2 patched.     # exit 0</code></pre>
+      <div class="callout warn">
+        <strong>Know the blind spot</strong>
+        <p>Hardened servers set <code>expose_php=Off</code> and hide the version. Those hosts come back <code>UNKNOWN</code>, not clean. Follow up with Layer 2 or your package inventory. Evidence: <a href="files/scan-before.csv">scan-before.csv</a> · <a href="files/scan-after.csv">scan-after.csv</a>.</p>
+      </div>
+
+      <h3>Layer 2: Host posture check</h3>
+      <p><a href="files/check_mitigations.sh"><code>check_mitigations.sh</code></a> runs on the PHP host and reads the live version and INI settings from <code>php</code> itself.</p>
+    </div>
+    <div class="tbl prose"><table>
+      <thead><tr><th>Exit</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>0</code></td><td><span class="pill good">Patched</span></td></tr>
+        <tr><td><code>1</code></td><td><span class="pill bad">Affected</span>, with trigger paths still enabled. Prints the interim settings to change.</td></tr>
+        <tr><td><code>3</code></td><td><span class="pill warn">Affected but mitigated</span>. Trigger paths are off, but the host still needs upgrading.</td></tr>
+        <tr><td><code>2</code></td><td><code>php</code> not found in <code>PATH</code></td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="prose">
+      <h3>Layer 3: Network rules (Suricata)</h3>
+      <p><a href="files/php2shell.rules"><code>php2shell.rules</code></a> holds three heuristic rules in the local SID range <code>1026001–1026003</code>. Treat them as tunable starting points, not turnkey IOCs. SID 1026003 in particular will fire on any noisy app until you baseline it.</p>
+    </div>
+    <div class="tbl prose"><table>
+      <thead><tr><th>SID</th><th>Detects</th><th>Default threshold</th></tr></thead>
+      <tbody>
+        <tr><td><code>1026001</code></td><td>Burst of POSTs carrying <code>PHP_SESSION_UPLOAD_PROGRESS</code> (109619 grooming)</td><td>30 from one source in 10s</td></tr>
+        <tr><td><code>1026002</code></td><td>Repeated POSTs declaring <code>Content-Length</code> ≥ 8 MB (109618 OOM pattern)</td><td>10 from one source in 15s</td></tr>
+        <tr><td><code>1026003</code></td><td>HTTP 500 storm from a PHP host (crash side effect)</td><td>20 to one client in 10s</td></tr>
+      </tbody>
+    </table></div>
+    <div class="prose">
+      <details>
+        <summary>View the rules</summary>
+<pre><code>alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109619 upload_progress field burst (possible UAF grooming)"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.request_body; content:"PHP_SESSION_UPLOAD_PROGRESS"; nocase; \
+    threshold:type both, track by_src, count 30, seconds 10; \
+    classtype:attempted-admin; sid:1026001; rev:2; )
+
+alert http any any -> $HOME_NET any ( \
+    msg:"PHP2SHELL CVE-2026-109618 repeated oversized POST (possible memory_limit bailout abuse)"; \
+    flow:to_server,established; http.method; content:"POST"; \
+    http.content_len; pcre:"/^(?:[89][0-9]{6}|[0-9]{8,})$/"; \
+    threshold:type both, track by_src, count 10, seconds 15; \
+    classtype:attempted-dos; sid:1026002; rev:2; )
+
+alert http $HOME_NET any -> any any ( \
+    msg:"PHP2SHELL possible exploitation side effect: HTTP 500 burst from PHP host"; \
+    flow:to_client,established; http.stat_code; content:"500"; \
+    threshold:type both, track by_dst, count 20, seconds 10; \
+    classtype:web-application-attack; sid:1026003; rev:2; )</code></pre>
+      </details>
+      <p class="muted">On an internet-facing sensor, scope the inbound rules to <code>$EXTERNAL_NET any -> $HOME_NET</code>.</p>
+
+      <h3>Layer 4: Log and SIEM detections</h3>
+      <p>Network rules show <em>attempts</em>. Logs show <em>consequences</em>. A healthy PHP fleet almost never segfaults a worker, so a spike in segfaults is the strongest single indicator. Full query set: <a href="files/log_detections.md"><code>log_detections.md</code></a>.</p>
+<pre><code># mod_php (Apache error_log)
+grep -E "child pid [0-9]+ exit signal Segmentation fault \(11\)" /var/log/apache2/error.log
+
+# PHP-FPM
+grep -E "child [0-9]+ (exited on signal 11|SIGSEGV)" /var/log/php*-fpm.log
+
+# Splunk-style: segfaults per host per minute
+index=web ("exit signal Segmentation fault" OR "exited on signal 11")
+| bin _time span=1m | stats count by host, _time
+| where count > 3</code></pre>
+      <div class="callout">
+        <strong>The page-worthy alert is a correlation</strong>
+        <p>An <em>attempt</em> signal (upload-progress burst, OOM-fatal burst, or SID 1026001/1026002) plus a <em>crash</em> signal (worker segfault) <strong>from the same host within 5 minutes</strong>. That pairing is very unlikely to be benign.</p>
+      </div>
+
+      <h2>How we validated it</h2>
+      <p>Every artifact on this page was run, not just written. All testing took place in an isolated Docker lab bound to <code>127.0.0.1</code> on an internal network.</p>
+    </div>
+    <div class="tbl prose"><table>
+      <thead><tr><th>Artifact</th><th>Test</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Suricata rules</td><td>Loaded with <code>suricata -T</code> on Suricata 7.0.11</td><td><span class="pill good">Pass</span> All 3 load cleanly</td></tr>
+        <tr><td>Suricata rules</td><td>Replayed a generated pcap containing 35 upload-progress POSTs, 12 POSTs of 9 MB, 25 HTTP 500s and a benign control request</td><td><span class="pill good">Pass</span> Each SID fires once. The control stays quiet.</td></tr>
+        <tr><td><code>scan_fleet.py</code></td><td>Mock hosts covering affected, patched, EOL (8.1), hidden version and unreachable</td><td><span class="pill good">Pass</span> Correct verdict for each. Exit codes 1, 0 and 2 as documented.</td></tr>
+        <tr><td><code>check_mitigations.sh</code></td><td>Official <code>php:8.4.26</code>, <code>8.4.27</code> and <code>8.5.11</code> images, plus 8.5.11 with both trigger paths disabled</td><td><span class="pill good">Pass</span> Exit codes 1, 0, 1 and 3 as documented</td></tr>
+        <tr><td>Lab targets</td><td>Unpatched 8.4.26 and 8.5.11 upgraded to 8.4.27 and 8.5.12</td><td><span class="pill good">Pass</span> Verdict flips from AFFECTED to patched</td></tr>
+      </tbody>
+    </table></div>
+
+    <figure class="prose">
+      <video controls muted playsinline preload="none" poster="img/poster.png" width="1280" height="720">
+        <source src="img/php2shell-detection.mp4" type="video/mp4">
+      </video>
+      <figcaption>22-second walkthrough: an exposed target, the signals to watch, the fix, and the clean re-scan.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h2>Remediation</h2>
+      <ol class="asks">
+        <li><strong>Upgrade</strong> to 8.2.35, 8.3.36, 8.4.27 or 8.5.12 (or later). This is the only complete fix.</li>
+        <li><strong>If you can't patch yet</strong>, set <code>session.upload_progress.enabled=0</code>, and on 8.5 also set <code>fatal_error_backtraces=0</code>. Then <strong>restart every worker</strong>: the settings only apply to new workers. These steps reduce the exposure but don't remove it.</li>
+        <li><strong>Verify</strong>: <code>check_mitigations.sh</code> should exit <code>0</code> on each host, the fleet scan should exit <code>0</code>, and segfault counts should return to baseline.</li>
+        <li><strong>Retire</strong> PHP ≤ 8.1. There is no full upstream fix for those branches.</li>
+      </ol>
+
+      <h2>Scope and limitations</h2>
+      <ul class="clean">
+        <li><strong>No exploit is published here, on purpose.</strong> The lab demonstrates exposure and patch verification, which is the deliverable defenders need.</li>
+        <li>The network rules are <strong>heuristics</strong>. They catch setup patterns and side effects, not the corruption itself. Tune thresholds to your traffic.</li>
+        <li>Version fingerprinting can't see hosts with <code>expose_php=Off</code>, and some vendors backport fixes without changing the version string. Confirm with the vendor's package changelog.</li>
+        <li>Version data comes from the php-src advisory. Check <a href="https://www.php.net/ChangeLog-8.php">php.net</a> for updates before acting on it.</li>
+      </ul>
+
+      <h2>Downloads</h2>
+    </div>
+    <div class="tbl prose dl"><table>
+      <thead><tr><th>File</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td><a href="files/scan_fleet.py">scan_fleet.py</a></td><td>Remote fleet exposure scanner (Python 3, standard library only)</td></tr>
+        <tr><td><a href="files/check_mitigations.sh">check_mitigations.sh</a></td><td>On-host version and mitigation check (bash)</td></tr>
+        <tr><td><a href="files/php2shell.rules">php2shell.rules</a></td><td>Suricata 7 rules, SIDs 1026001–1026003</td></tr>
+        <tr><td><a href="files/log_detections.md">log_detections.md</a></td><td>grep and SIEM queries plus the correlation rule</td></tr>
+        <tr><td><a href="files/scan-before.csv">scan-before.csv</a> · <a href="files/scan-after.csv">scan-after.csv</a></td><td>Raw scanner evidence from the lab</td></tr>
+      </tbody>
+    </table></div>
+    <p class="prose muted">Free to use and adapt. Provided as-is. Test in your own environment before deploying.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap"><a href="../">More research</a> · <a href="../../">Cydra Suite</a> by Cydraintel · <a href="https://github.com/Nyanites">Source on GitHub</a></div>
+</footer>
+</body>
+</html>
