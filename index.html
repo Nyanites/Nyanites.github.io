@@ -22,13 +22,13 @@
   :root {
     --bg: #f7f8fb; --surface: #ffffff; --text: #141a28; --muted: #5b6478; --border: #e1e5ee;
     --code-bg: #eef1f7; --shadow: 0 14px 40px rgba(20, 30, 60, 0.14);
-    --tide: #1f4fd1; --sed: #a8561a; --net: #0c7f96; --res: #b4361f;
+    --tide: #1f4fd1; --sed: #a8561a; --net: #0c7f96; --res: #b4361f; --bridge: #6d28d9;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0d0f14; --surface: #161a22; --text: #e8ecf5; --muted: #9aa4b8; --border: #252c3a;
       --code-bg: #1c2230; --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
-      --tide: #5b8cff; --sed: #e89a55; --net: #4cc9f0; --res: #ff8a6e;
+      --tide: #5b8cff; --sed: #e89a55; --net: #4cc9f0; --res: #ff8a6e; --bridge: #a78bfa;
     }
   }
   * { box-sizing: border-box; }
@@ -45,6 +45,9 @@
   .tool.tide { --c: var(--tide); }
   .tool.sed { --c: var(--sed); }
   .tool.net { --c: var(--net); }
+  .tool.bridge { --c: var(--bridge); }
+  .devtools .tools { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .devtools > h2 { font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
   .brand { display: flex; align-items: center; gap: 13px; margin: 0 0 18px; }
   .brand img { width: 46px; height: 46px; border-radius: 11px; display: block; box-shadow: var(--shadow); }
   .brand .suite { margin: 0; }
@@ -122,6 +125,25 @@
       <div class="plat">macOS · Linux</div>
       <div class="go">Visit NetSift →</div>
     </a>
+  </div>
+  <div class="wrap devtools">
+    <h2>Developer tools</h2>
+    <div class="tools">
+      <a class="tool bridge" href="bridge/">
+        <div class="head">
+          <img src="bridge/assets/icon.svg" width="56" height="56" alt="">
+          <div><h2>Bridge</h2><div class="kind">For Claude Code</div></div>
+        </div>
+        <p>Let the Claude Code sessions in your different projects talk to each other.</p>
+        <ul>
+          <li>Sessions brief each other on cross-repo changes</li>
+          <li>Idle sessions wake up when a message arrives</li>
+          <li>Local GUI to watch every session and join in</li>
+        </ul>
+        <div class="plat">macOS · Linux · One Python file · MIT</div>
+        <div class="go">Visit Bridge →</div>
+      </a>
+    </div>
   </div>
   <div class="wrap research">
     <h2>Research &amp; detections · <a href="research/">all write-ups</a></h2>
